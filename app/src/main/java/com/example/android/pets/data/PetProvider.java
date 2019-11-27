@@ -7,6 +7,7 @@ import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import android.util.Log;
 
 import com.example.android.pets.data.PetContract.PetEntry;
 
@@ -89,7 +90,47 @@ public class PetProvider extends ContentProvider {
      */
     @Override
     public Uri insert(Uri uri, ContentValues contentValues) {
-        return null;
+        final int match = sUriMatcher.match(uri);
+        switch (match) {
+            case PETS:
+                return insertPet(uri, contentValues);
+            default:
+                throw new IllegalArgumentException("Insertion is not supported for " + uri);
+        }
+    }
+
+    /**
+     * Insert a pet into the database with the given content values. Return the new content URI
+     * for that specific row in the database.
+     */
+    private Uri insertPet(Uri uri, ContentValues values) {
+        // check name
+        String name = values.getAsString(PetEntry.COLUMN_PET_NAME);
+        if (name == null){
+            throw new IllegalArgumentException("Pet requires a name");
+        }
+        // Check that the gender is valid
+        Integer gender = values.getAsInteger(PetEntry.COLUMN_PET_GENDER);
+        if (gender == null || !PetEntry.isValidGender(gender)){
+            throw new IllegalArgumentException("Pet requires valid gender");
+        }
+        // If the weight is provided, check that it's greater than or equal to 0 kg
+        Integer weight = values.getAsInteger(PetEntry.COLUMN_PET_WEIGHT);
+        if (weight !=null && weight<0){
+            throw new IllegalArgumentException("Pet requires valid weight");
+        }
+
+        // Get writable database
+        SQLiteDatabase database = mDbHelper.getWritableDatabase();
+
+        long id = database.insert(PetEntry.TABLE_NAME,null,values);
+        // Once we know the ID of the new row in the table,
+        // return the new URI with the ID appended to the end of it
+        if (id==-1) {
+            Log.e(LOG_TAG,"Failed to insert row for " + uri);
+            return null;
+        }
+        return ContentUris.withAppendedId(uri, id);
     }
 
     /**

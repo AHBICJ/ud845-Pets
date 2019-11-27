@@ -17,6 +17,7 @@ package com.example.android.pets;
 
 import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.NavUtils;
 import android.support.v7.app.AppCompatActivity;
@@ -31,6 +32,7 @@ import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.example.android.pets.data.PetContract;
+import com.example.android.pets.data.PetContract.PetEntry;
 import com.example.android.pets.data.PetDbHelper;
 
 /**
@@ -56,8 +58,6 @@ public class EditorActivity extends AppCompatActivity {
      */
     private int mGender = 0;
 
-    private PetDbHelper mDbHelper;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,7 +68,6 @@ public class EditorActivity extends AppCompatActivity {
         mBreedEditText = (EditText) findViewById(R.id.edit_pet_breed);
         mWeightEditText = (EditText) findViewById(R.id.edit_pet_weight);
         mGenderSpinner = (Spinner) findViewById(R.id.spinner_gender);
-        mDbHelper = new PetDbHelper(this);
         setupSpinner();
     }
 
@@ -94,11 +93,11 @@ public class EditorActivity extends AppCompatActivity {
                 String selection = (String) parent.getItemAtPosition(position);
                 if (!TextUtils.isEmpty(selection)) {
                     if (selection.equals(getString(R.string.gender_male))) {
-                        mGender = PetContract.PetEntry.GENDER_MALE; // Male
+                        mGender = PetEntry.GENDER_MALE; // Male
                     } else if (selection.equals(getString(R.string.gender_female))) {
-                        mGender = PetContract.PetEntry.GENDER_FEMALE; // Female
+                        mGender = PetEntry.GENDER_FEMALE; // Female
                     } else {
-                        mGender = PetContract.PetEntry.GENDER_UNKNOWN; // Unknown
+                        mGender = PetEntry.GENDER_UNKNOWN; // Unknown
                     }
                 }
             }
@@ -146,14 +145,19 @@ public class EditorActivity extends AppCompatActivity {
         String breedString = mBreedEditText.getText().toString().trim();
         int weight = Integer.parseInt(mWeightEditText.getText().toString().trim());
         ContentValues values = new ContentValues();
-        values.put(PetContract.PetEntry.COLUMN_PET_NAME,nameString);
-        values.put(PetContract.PetEntry.COLUMN_PET_BREED,breedString);
-        values.put(PetContract.PetEntry.COLUMN_PET_GENDER,mGender);
-        values.put(PetContract.PetEntry.COLUMN_PET_WEIGHT,weight);
-        SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        long newRowId = db.insert(PetContract.PetEntry.TABLE_NAME,null,values);
-        if(newRowId!=-1)
-            Toast.makeText(EditorActivity.this, "the new row id: " + newRowId, Toast.LENGTH_SHORT).show();
-        else Toast.makeText(EditorActivity.this, "add failed", Toast.LENGTH_SHORT).show();
+        values.put(PetEntry.COLUMN_PET_NAME,nameString);
+        values.put(PetEntry.COLUMN_PET_BREED,breedString);
+        values.put(PetEntry.COLUMN_PET_GENDER,mGender);
+        values.put(PetEntry.COLUMN_PET_WEIGHT,weight);
+        Uri newUri = getContentResolver().insert(PetEntry.CONTENT_URI,values);
+        if (newUri == null) {
+            // If the new content URI is null, then there was an error with insertion.
+            Toast.makeText(this, getString(R.string.editor_insert_pet_failed),
+                    Toast.LENGTH_SHORT).show();
+        } else {
+            // Otherwise, the insertion was successful and we can display a toast.
+            Toast.makeText(this, getString(R.string.editor_insert_pet_successful),
+                    Toast.LENGTH_SHORT).show();
+        }
     }
 }
