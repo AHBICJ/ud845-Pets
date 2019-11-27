@@ -15,7 +15,11 @@
  */
 package com.example.android.pets;
 
+import android.app.LoaderManager;
 import android.content.ContentValues;
+import android.content.CursorLoader;
+import android.content.Loader;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
@@ -38,18 +42,26 @@ import com.example.android.pets.data.PetDbHelper;
 /**
  * Allows user to create a new pet or edit an existing one.
  */
-public class EditorActivity extends AppCompatActivity {
+public class EditorActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor> {
 
-    /** EditText field to enter the pet's name */
+    /**
+     * EditText field to enter the pet's name
+     */
     private EditText mNameEditText;
 
-    /** EditText field to enter the pet's breed */
+    /**
+     * EditText field to enter the pet's breed
+     */
     private EditText mBreedEditText;
 
-    /** EditText field to enter the pet's weight */
+    /**
+     * EditText field to enter the pet's weight
+     */
     private EditText mWeightEditText;
 
-    /** EditText field to enter the pet's gender */
+    /**
+     * EditText field to enter the pet's gender
+     */
     private Spinner mGenderSpinner;
 
     /**
@@ -57,23 +69,28 @@ public class EditorActivity extends AppCompatActivity {
      * 0 for unknown gender, 1 for male, 2 for female.
      */
     private int mGender = 0;
+    private static final int EXISTING_PET_LOADER = 0;
+    private Uri mCurrentPetUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_editor);
-        Uri currentPetUri = getIntent().getData();
-        if (currentPetUri==null){
-            setTitle(getString(R.string.editor_activity_title_new_pet));
-        }
-        else{
-            setTitle(getString(R.string.editor_activity_title_edit_pet));
-        }
+        mCurrentPetUri = getIntent().getData();
+
         // Find all relevant views that we will need to read user input from
         mNameEditText = (EditText) findViewById(R.id.edit_pet_name);
         mBreedEditText = (EditText) findViewById(R.id.edit_pet_breed);
         mWeightEditText = (EditText) findViewById(R.id.edit_pet_weight);
         mGenderSpinner = (Spinner) findViewById(R.id.spinner_gender);
+
+        if (mCurrentPetUri == null) {
+            setTitle(getString(R.string.editor_activity_title_new_pet));
+        } else {
+            setTitle(getString(R.string.editor_activity_title_edit_pet));
+            getLoaderManager().initLoader(EXISTING_PET_LOADER, null, this);
+        }
+
         setupSpinner();
     }
 
@@ -130,7 +147,7 @@ public class EditorActivity extends AppCompatActivity {
         switch (item.getItemId()) {
             // Respond to a click on the "Save" menu option
             case R.id.action_save:
-                insertPet();
+                savePet();
                 finish();
                 return true;
             // Respond to a click on the "Delete" menu option
@@ -146,24 +163,82 @@ public class EditorActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    private void insertPet() {
+    private void savePet() {
         String nameString = mNameEditText.getText().toString().trim();
         String breedString = mBreedEditText.getText().toString().trim();
-        int weight = Integer.parseInt(mWeightEditText.getText().toString().trim());
-        ContentValues values = new ContentValues();
-        values.put(PetEntry.COLUMN_PET_NAME,nameString);
-        values.put(PetEntry.COLUMN_PET_BREED,breedString);
-        values.put(PetEntry.COLUMN_PET_GENDER,mGender);
-        values.put(PetEntry.COLUMN_PET_WEIGHT,weight);
-        Uri newUri = getContentResolver().insert(PetEntry.CONTENT_URI,values);
-        if (newUri == null) {
-            // If the new content URI is null, then there was an error with insertion.
-            Toast.makeText(this, getString(R.string.editor_insert_pet_failed),
-                    Toast.LENGTH_SHORT).show();
-        } else {
-            // Otherwise, the insertion was successful and we can display a toast.
-            Toast.makeText(this, getString(R.string.editor_insert_pet_successful),
-                    Toast.LENGTH_SHORT).show();
+        String weightString = mWeightEditText.getText().toString().trim();
+
+        if (mCurrentPetUri == null &&
+                TextUtils.isEmpty(nameString) && TextUtils.isEmpty(breedString) &&
+                TextUtils.isEmpty(weightString) && mGender == PetEntry.GENDER_UNKNOWN) {
+            return;
         }
+
+        ContentValues values = new ContentValues();
+        values.put(PetEntry.COLUMN_PET_NAME, nameString);
+        values.put(PetEntry.COLUMN_PET_BREED, breedString);
+        values.put(PetEntry.COLUMN_PET_GENDER, mGender);
+        int weight = 0;
+        try {
+            weight = Integer.parseInt(weightString);
+        } catch (Exception e) {
+        }
+        values.put(PetEntry.COLUMN_PET_WEIGHT, weight);
+        values.put(PetEntry.COLUMN_PET_WEIGHT, weight);
+        if (mCurrentPetUri == null) {
+            Uri newUri = getContentResolver().insert(PetEntry.CONTENT_URI, values);
+            if (newUri == null) {
+                // If the new content URI is null, then there was an error with insertion.
+                Toast.makeText(this, getString(R.string.editor_insert_pet_failed),
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                // Otherwise, the insertion was successful and we can display a toast.
+                Toast.makeText(this, getString(R.string.editor_save_pet_successful),
+                        Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            int rowsUpdated = getContentResolver().update(mCurrentPetUri, values, null, null);
+            if (rowsUpdated == 0) {
+                // If the new content URI is null, then there was an error with insertion.
+                Toast.makeText(this, getString(R.string.editor_update_pet_failed),
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                // Otherwise, the insertion was successful and we can display a toast.
+                Toast.makeText(this, getString(R.string.editor_save_pet_successful),
+                        Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    @Override
+    public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
+        String[] projection = {
+                PetEntry._ID,
+                PetEntry.COLUMN_PET_NAME,
+                PetEntry.COLUMN_PET_BREED,
+                PetEntry.COLUMN_PET_GENDER,
+                PetEntry.COLUMN_PET_WEIGHT
+        };
+        return new CursorLoader(this, mCurrentPetUri, projection, null, null, null);
+    }
+
+    @Override
+    public void onLoadFinished(Loader<Cursor> loader, Cursor cursor) {
+        if (cursor.moveToFirst()) {
+            mNameEditText.setText(cursor.getString(cursor.getColumnIndexOrThrow(PetEntry.COLUMN_PET_NAME)));
+            mBreedEditText.setText(cursor.getString(cursor.getColumnIndexOrThrow(PetEntry.COLUMN_PET_BREED)));
+            mWeightEditText.setText(Integer.toString(cursor.getInt(cursor.getColumnIndexOrThrow(PetEntry.COLUMN_PET_WEIGHT))));
+            mGender = cursor.getInt(cursor.getColumnIndexOrThrow(PetEntry.COLUMN_PET_GENDER));
+            mGenderSpinner.setSelection(mGender);
+        }
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Cursor> loader) {
+        mNameEditText.setText("");
+        mBreedEditText.setText("");
+        mWeightEditText.setText("");
+        mGender = PetEntry.GENDER_UNKNOWN;
+        mGenderSpinner.setSelection(mGender);
     }
 }
